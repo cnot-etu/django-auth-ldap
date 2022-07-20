@@ -55,7 +55,7 @@ from django.contrib.auth.models import User, Group, Permission
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 
-from student.models import UserProfile
+from common.djangoapps.student.models import UserProfile
 
 from .config import (
     ConfigurationWarning,
