@@ -51,9 +51,11 @@ import django.conf
 import django.dispatch
 import ldap
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.models import User, Group, Permission
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
+
+from student.models import UserProfile
 
 from .config import (
     ConfigurationWarning,
@@ -65,6 +67,23 @@ from .config import (
 
 logger = _LDAPConfig.get_logger()
 
+
+def email_in_LDAP_already(email):
+    """
+    Check if email in LDAP students database and no need in registrate
+    """
+    settings = LDAPSettings('AUTH_LDAP_')
+    con = ldap.initialize(settings.SERVER_URI, bytes_mode=False)
+    con.simple_bind_s(settings.BIND_DN, settings.BIND_PASSWORD)
+    result = con.search_s("ou=Students,dc=etu,dc=local", ldap.SCOPE_SUBTREE, "(uid="+email+")")
+
+    return result
+
+def bind_user_without_password(email):
+    ldap_backend = LDAPBackend()
+    user = ldap_backend.populate_user(username=email)
+
+    return user
 
 # Exported signals
 
@@ -626,7 +645,24 @@ class _LDAPUser:
             populate_user.send(type(self.backend), user=self._user, ldap_user=self)
 
         if save_user:
-            self._user.save()
+            check_user = User.objects.filter(username=username)
+            if len(check_user) == 0:
+                self._user.save()
+
+        try:
+            __ = self._user.profile
+        except UserProfile.DoesNotExist:
+            UserProfile.objects.get_or_create(
+                user=self._user,
+                defaults={'name': self._user.username}
+            )
+            self._user.profile.name = self._profile_name
+
+        # add to meta key sso-backend
+        meta = self._user.profile.get_meta()
+        meta['sso-backend'] = u'LDAP'
+        self._user.profile.set_meta(meta)
+        self._user.profile.save()
 
         # This has to wait until we're sure the user has a pk.
         if self.settings.MIRROR_GROUPS or self.settings.MIRROR_GROUPS_EXCEPT:
@@ -651,7 +687,15 @@ class _LDAPUser:
                     "%s does not have a value for the attribute %s", self.dn, attr
                 )
             else:
-                setattr(self._user, field, value)
+                if field == 'profile':
+                    self._profile_name = value
+                else:
+                    if field == 'username':
+                        value = value.split("@")[0]
+                    if field == 'group':
+                        field = 'username'
+                        value = self._user.username + value
+                    setattr(self._user, field, value)
 
     def _populate_user_from_group_memberships(self):
         for field, group_dns in self.settings.USER_FLAGS_BY_GROUP.items():
