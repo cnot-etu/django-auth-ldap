@@ -239,7 +239,7 @@ class LDAPBackend:
 
         if self.settings.USER_QUERY_FIELD:
             query_field = self.settings.USER_QUERY_FIELD
-            query_value = ldap_user.attrs[self.settings.USER_ATTR_MAP[query_field]][0]
+            query_value = ldap_user.attrs[self.settings.USER_ATTR_MAP[query_field]][0].split("@")[0]
             lookup = query_field
         else:
             query_field = model.USERNAME_FIELD
@@ -288,6 +288,7 @@ class _LDAPUser:
     _connection = None
     _connection_bound = False
 
+    _profile_name = None
     #
     # Initialization
     #
@@ -692,6 +693,12 @@ class _LDAPUser:
                 else:
                     if field == 'username':
                         value = value.split("@")[0]
+                    if field == 'name':
+                        value = value
+                    if field == 'last_name':
+                        value = value.split()[0]
+                    if field == 'first_name':
+                        value = value.split()[1]
                     if field == 'group':
                         field = 'username'
                         value = self._user.username + value
