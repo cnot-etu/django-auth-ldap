@@ -75,7 +75,7 @@ def email_in_LDAP_already(email):
     settings = LDAPSettings('AUTH_LDAP_')
     con = ldap.initialize(settings.SERVER_URI, bytes_mode=False)
     con.simple_bind_s(settings.BIND_DN, settings.BIND_PASSWORD)
-    result = con.search_s("ou=Students,dc=etu,dc=local", ldap.SCOPE_SUBTREE, "(uid="+email+")")
+    result = con.search_s(settings.USER_SEARCH, ldap.SCOPE_SUBTREE, "(uid="+email+")")
 
     return result
 
